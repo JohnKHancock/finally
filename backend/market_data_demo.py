@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -77,9 +76,11 @@ class TickerStats:
     history:    deque = field(default_factory=lambda: deque(maxlen=48))
     session_hi: float = 0.0
     session_lo: float = float("inf")
+    last_tick:  float = 0.0  # Unix timestamp of the most recent price update
 
     def record(self, price: float) -> None:
         self.history.append(price)
+        self.last_tick = time.time()
         if price > self.session_hi:
             self.session_hi = price
         if price < self.session_lo:
@@ -88,16 +89,52 @@ class TickerStats:
 
 # ── Rendering helpers ─────────────────────────────────────────────────────────
 
-def sparkline(values: list[float]) -> str:
-    """Render a list of floats as a unicode sparkline string."""
-    if len(values) < 2:
-        return DIM + "─" * len(values) if values else ""
+def _spark_chars(values: list[float]) -> str:
+    """Convert a list of floats to raw sparkline block characters."""
+    if not values:
+        return ""
+    if len(values) == 1:
+        return SPARK[len(SPARK) // 2]
     lo, hi = min(values), max(values)
     spread = hi - lo
     n = len(SPARK) - 1
     if spread == 0:
         return SPARK[n // 2] * len(values)
     return "".join(SPARK[round((v - lo) / spread * n)] for v in values)
+
+
+def sparkline_text(values: list[float], direction: str, last_tick: float) -> Text:
+    """Render a live sparkline as a Rich Text with a colored, flashing tail.
+
+    Visual encoding:
+      Body  (older ticks) — dim blue: price history context
+      Tail  (last 14 chars) — direction color: recent trend
+      Tip   (newest tick)  — bold bright green/red, flashes for 500ms on update
+    """
+    chars = _spark_chars(list(values))
+    if not chars:
+        return Text("", style=DIM)
+
+    # Split into body / tail / tip
+    TAIL_LEN = min(14, max(0, len(chars) - 1))
+    body = chars[:len(chars) - TAIL_LEN - 1]
+    tail = chars[len(chars) - TAIL_LEN:-1] if TAIL_LEN > 0 else ""
+    tip  = chars[-1]
+
+    c = UP if direction == "up" else (DOWN if direction == "down" else FLAT)
+
+    # Flash: tip is bright & bold for 500ms after a new tick arrives
+    age = time.time() - last_tick
+    if age < 0.5:
+        tip_style = f"bold {'bright_green' if direction == 'up' else 'bright_red'}"
+    else:
+        tip_style = f"bold {c}"
+
+    t = Text(no_wrap=True)
+    t.append(body, style=f"{DIM}")
+    t.append(tail, style=c)
+    t.append(tip,  style=tip_style)
+    return t
 
 
 def fmt_price(price: float) -> str:
@@ -177,7 +214,7 @@ def build_price_table(cache: PriceCache, stats: dict[str, TickerStats]) -> Panel
 
         c = direction_color(update.direction)
         a = arrow(update.direction)
-        spark = sparkline(list(st.history))
+        spark = sparkline_text(list(st.history), update.direction, st.last_tick)
 
         hi_str = f"${fmt_price(st.session_hi)}" if st.session_hi > 0 else "─"
         lo_str = f"${fmt_price(st.session_lo)}" if st.session_lo < float('inf') else "─"
@@ -190,7 +227,7 @@ def build_price_table(cache: PriceCache, stats: dict[str, TickerStats]) -> Panel
             Text(a,                               style=f"bold {c}"),
             Text(hi_str,                          style=UP),
             Text(lo_str,                          style=DOWN),
-            Text(spark,                           style=BLUE),
+            spark,
         )
 
     return Panel(
