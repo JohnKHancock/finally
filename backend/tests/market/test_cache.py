@@ -84,6 +84,12 @@ class TestPriceCacheBasicOperations:
         update = cache.update("AAPL", 190.50, timestamp=custom_ts)
         assert update.timestamp == custom_ts
 
+    def test_zero_timestamp_is_preserved(self):
+        """timestamp=0.0 is falsy but must not be replaced by time.time()."""
+        cache = PriceCache()
+        update = cache.update("AAPL", 190.50, timestamp=0.0)
+        assert update.timestamp == 0.0
+
     def test_price_rounding_to_two_decimals(self):
         cache = PriceCache()
         update = cache.update("AAPL", 190.12345)

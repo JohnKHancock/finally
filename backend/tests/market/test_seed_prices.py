@@ -1,6 +1,5 @@
 """Tests for seed prices and GBM parameters."""
 
-import pytest
 
 from app.market.seed_prices import (
     CORRELATION_GROUPS,
@@ -12,7 +11,6 @@ from app.market.seed_prices import (
     TICKER_PARAMS,
     TSLA_CORR,
 )
-
 
 DEFAULT_TICKERS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "JPM", "V", "NFLX"]
 

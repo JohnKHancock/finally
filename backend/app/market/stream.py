@@ -86,3 +86,4 @@ async def _generate_events(
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         logger.info("SSE stream cancelled for: %s", client_ip)
+        raise
