@@ -1,8 +1,6 @@
 """Tests for SSE streaming endpoint."""
 
-import asyncio
 import json
-from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

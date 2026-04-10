@@ -4,9 +4,8 @@ import math
 
 import numpy as np
 
-from app.market.seed_prices import SEED_PRICES, TICKER_PARAMS
+from app.market.seed_prices import SEED_PRICES
 from app.market.simulator import GBMSimulator
-
 
 DEFAULT_TICKERS = list(SEED_PRICES.keys())  # The 10 default tickers
 
@@ -187,10 +186,10 @@ class TestGBMSimulatorCorrelation:
     def test_cholesky_valid_for_all_10_tickers(self):
         """Correlation matrix for all 10 default tickers must be positive definite."""
         sim = GBMSimulator(tickers=DEFAULT_TICKERS)
-        L = sim._cholesky
-        assert L is not None
-        # L @ L.T should reconstruct the correlation matrix
-        corr = L @ L.T
+        cholesky = sim._cholesky
+        assert cholesky is not None
+        # cholesky @ cholesky.T should reconstruct the correlation matrix
+        corr = cholesky @ cholesky.T
         # Diagonal should be 1.0 (self-correlation)
         for i in range(len(DEFAULT_TICKERS)):
             assert abs(corr[i, i] - 1.0) < 1e-10, f"Diagonal [{i},{i}] = {corr[i,i]}"
@@ -245,22 +244,36 @@ class TestGBMSimulatorParameters:
         assert abs(GBMSimulator.DEFAULT_DT - expected) < 1e-15
 
     def test_high_volatility_ticker_more_variable(self):
-        """TSLA (sigma=0.5) should have more price variance than V (sigma=0.17)."""
-        n_steps = 10_000
-        tsla_prices = []
-        v_prices = []
+        """TSLA (sigma=0.5) should have higher per-step volatility than V (sigma=0.17).
 
+        Uses log-return std (not price level std) — the correct measure of volatility.
+        Log-return std is proportional to sigma and is independent of drift direction
+        or starting price, making this test deterministic with a fixed seed.
+        """
+        np.random.seed(42)
+
+        n_steps = 10_000
         tsla_sim = GBMSimulator(tickers=["TSLA"])
         v_sim = GBMSimulator(tickers=["V"])
 
-        for _ in range(n_steps):
-            tsla_prices.append(tsla_sim.step()["TSLA"])
-            v_prices.append(v_sim.step()["V"])
+        tsla_log_returns = []
+        v_log_returns = []
 
-        tsla_std = float(np.std(tsla_prices))
-        v_std = float(np.std(v_prices))
-        # TSLA has 3x higher sigma; it should have higher variance in practice
-        assert tsla_std > v_std, f"TSLA std {tsla_std:.4f} should > V std {v_std:.4f}"
+        prev_tsla = tsla_sim.get_price("TSLA")
+        prev_v = v_sim.get_price("V")
+
+        for _ in range(n_steps):
+            tsla_price = tsla_sim.step()["TSLA"]
+            v_price = v_sim.step()["V"]
+            tsla_log_returns.append(math.log(tsla_price / prev_tsla))
+            v_log_returns.append(math.log(v_price / prev_v))
+            prev_tsla = tsla_price
+            prev_v = v_price
+
+        tsla_std = float(np.std(tsla_log_returns))
+        v_std = float(np.std(v_log_returns))
+        # TSLA has ~3x higher sigma; log-return std should reflect this clearly
+        assert tsla_std > v_std, f"TSLA log-return std {tsla_std:.6f} should > V {v_std:.6f}"
 
     def test_shock_events_bounded(self):
         """Even with 100% shock probability, prices stay within 5% per tick."""

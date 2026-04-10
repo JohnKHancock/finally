@@ -6,8 +6,7 @@ import pytest
 
 from app.market.cache import PriceCache
 from app.market.seed_prices import SEED_PRICES
-from app.market.simulator import GBMSimulator, SimulatorDataSource
-
+from app.market.simulator import SimulatorDataSource
 
 DEFAULT_TICKERS = list(SEED_PRICES.keys())
 
@@ -191,3 +190,41 @@ class TestSimulatorDataSourceWatchlist:
         await source.start(["AAPL"])
         await asyncio.sleep(0.1)
         await source.stop()
+
+    async def test_add_ticker_normalizes_case(self):
+        """Lowercase tickers are normalized to uppercase."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=10.0)
+        await source.start(["AAPL"])
+
+        await source.add_ticker("tsla")
+
+        assert "TSLA" in source.get_tickers()
+        assert cache.get_price("TSLA") is not None
+
+        await source.stop()
+
+    async def test_add_ticker_strips_whitespace(self):
+        """Tickers with surrounding whitespace are normalized."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache, update_interval=10.0)
+        await source.start(["AAPL"])
+
+        await source.add_ticker("  NVDA  ")
+
+        assert "NVDA" in source.get_tickers()
+
+        await source.stop()
+
+    async def test_add_ticker_before_start_is_noop(self):
+        """add_ticker before start() logs a warning and does not crash."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache)
+        await source.add_ticker("AAPL")  # Must not raise
+        assert source.get_tickers() == []
+
+    async def test_remove_ticker_before_start_is_noop(self):
+        """remove_ticker before start() logs a warning and does not crash."""
+        cache = PriceCache()
+        source = SimulatorDataSource(price_cache=cache)
+        await source.remove_ticker("AAPL")  # Must not raise
