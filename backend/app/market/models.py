@@ -15,6 +15,15 @@ class PriceUpdate:
     previous_price: float
     timestamp: float = field(default_factory=time.time)  # Unix seconds
 
+    def __post_init__(self) -> None:
+        """Validate fields after construction."""
+        if not self.ticker or not self.ticker.strip():
+            raise ValueError("ticker must be a non-empty string")
+        if self.price < 0:
+            raise ValueError(f"price must be non-negative, got {self.price}")
+        if self.previous_price < 0:
+            raise ValueError(f"previous_price must be non-negative, got {self.previous_price}")
+
     @property
     def change(self) -> float:
         """Absolute price change from previous update."""
@@ -47,3 +56,13 @@ class PriceUpdate:
             "change_percent": self.change_percent,
             "direction": self.direction,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> PriceUpdate:
+        """Deserialize from a dictionary (e.g., from JSON or SSE payload)."""
+        return cls(
+            ticker=data["ticker"],
+            price=data["price"],
+            previous_price=data["previous_price"],
+            timestamp=data["timestamp"],
+        )

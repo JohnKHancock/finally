@@ -137,6 +137,10 @@ class GBMSimulator:
         """Current price for a ticker, or None if not tracked."""
         return self._prices.get(ticker)
 
+    def get_prices(self) -> dict[str, float]:
+        """Return a snapshot of all current prices."""
+        return dict(self._prices)
+
     def get_tickers(self) -> list[str]:
         """Return the list of currently tracked tickers."""
         return list(self._tickers)
