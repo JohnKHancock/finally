@@ -61,10 +61,22 @@ class PriceCache:
         with self._lock:
             self._prices.pop(ticker, None)
 
+    def clear(self) -> None:
+        """Remove all tickers from the cache. Version counter continues monotonically."""
+        with self._lock:
+            self._prices.clear()
+
+    @property
+    def tickers(self) -> list[str]:
+        """List of all currently tracked tickers."""
+        with self._lock:
+            return list(self._prices.keys())
+
     @property
     def version(self) -> int:
         """Current version counter. Useful for SSE change detection."""
-        return self._version
+        with self._lock:
+            return self._version
 
     def __len__(self) -> int:
         with self._lock:
